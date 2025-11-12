@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lifestyle Causal Graph</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; }
+        body { display: flex; flex-direction: column; overflow: hidden; }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px 30px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .header h1 { font-size: 28px; font-weight: 700; margin-bottom: 5px; }
+        .header p { font-size: 14px; opacity: 0.95; }
+        
+        .toolbar {
+            background: white;
+            padding: 15px 20px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            border-bottom: 2px solid #e8eef7;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        
+        .btn {
+            padding: 10px 18px;
+            background: white;
+            border: 2px solid #667eea;
+            border-radius: 6px;
+            color: #667eea;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 13px;
+        }
+        .btn:hover { background: #667eea; color: white; transform: translateY(-2px); box-shadow: 0 4px 10px rgba(102,126,234,0.3); }
+        
+        .zoom-info { min-width: 80px; font-weight: 600; color: #667eea; font-size: 14px; }
+        .help-text { font-size: 12px; color: #999; margin-left: auto; }
+        
+        .canvas-wrapper { flex: 1; position: relative; background: #f5f7fa; }
+        canvas { position: absolute; top: 0; left: 0; cursor: grab; }
+        canvas:active { cursor: grabbing; }
+        
+        .legend {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 18px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            font-size: 13px;
+            z-index: 100;
+            border: 2px solid #e8eef7;
+        }
+        .legend-title { font-weight: 700; margin-bottom: 10px; color: #333; }
+        .legend-item { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+        .legend-dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid #333; }
+        
+        .tooltip {
+            position: fixed;
+            background: white;
+            color: #333;
+            padding: 12px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            pointer-events: none;
+            z-index: 2000;
+            max-width: 350px;
+            border: 2px solid #667eea;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+        }
+        .tooltip.hidden { display: none; }
+        .tooltip strong { color: #667eea; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🏥 Lifestyle Causal Graph Explorer</h1>
+        <p>Domain-based + PC Algorithm | Draggable nodes, edge information on hover</p>
+    </div>
+    
+    <div class="toolbar">
+        <button class="btn" id="zoom-in">🔍+ Zoom In</button>
+        <button class="btn" id="zoom-out">🔍- Zoom Out</button>
+        <button class="btn" id="reset">⟲ Reset</button>
+        <div class="zoom-info">Zoom: <span id="zoom-level">100%</span></div>
+        <div class="help-text">Drag nodes • Hover edges for info • Scroll to zoom • Drag canvas to pan</div>
+    </div>
+    
+    <div class="canvas-wrapper" id="canvas-wrapper">
+        <canvas id="canvas"></canvas>
+        <div class="legend">
+            <div class="legend-title">Node Types</div>
+            <div class="legend-item"><div class="legend-dot" style="background: #3498db;"></div> <span>Source</span></div>
+            <div class="legend-item"><div class="legend-dot" style="background: #95a5a6;"></div> <span>Intermediate</span></div>
+            <div class="legend-item"><div class="legend-dot" style="background: #9b59b6;"></div> <span>Sink</span></div>
+        </div>
+    </div>
+    
+    <div id="tooltip" class="tooltip hidden"></div>
+    
+    <script>
+        const nodesData = [{"id": "Age", "label": "Age", "type": "source", "x": 915.4323969135822, "y": 650.0, "in_degree": 0, "out_degree": 0}, {"id": "Weight (kg)", "label": "Weight", "type": "intermediate", "x": 1596.410591665186, "y": 402.47922317422024, "in_degree": 2, "out_degree": 2}, {"id": "BMI", "label": "BMI", "type": "intermediate", "x": 1030.6807452222956, "y": 353.2303470195706, "in_degree": 2, "out_degree": 2}, {"id": "Fat_Percentage", "label": "Fat %", "type": "source", "x": 778.5887608597724, "y": 498.28959859847424, "in_degree": 0, "out_degree": 2}, {"id": "lean_mass_kg", "label": "Lean Mass", "type": "intermediate", "x": 1384.6775860693162, "y": 571.5736835529524, "in_degree": 3, "out_degree": 1}, {"id": "Resting_BPM", "label": "Resting Heart Rate", "type": "source", "x": 352.3978006313276, "y": 564.9866802146944, "in_degree": 0, "out_degree": 0}, {"id": "Max_BPM", "label": "Max Heart Rate", "type": "sink", "x": 1552.5312844321193, "y": 260.95659283516557, "in_degree": 1, "out_degree": 0}, {"id": "Avg_BPM", "label": "Avg Heart Rate", "type": "sink", "x": 291.01509809015414, "y": 243.24134442241922, "in_degree": 1, "out_degree": 0}, {"id": "pct_HRR", "label": "Heart Rate Reserve %", "type": "source", "x": 1051.7225781275265, "y": 366.64505571135135, "in_degree": 0, "out_degree": 2}, {"id": "Workout_Frequency (days/week)", "label": "Frequency", "type": "intermediate", "x": 689.3496398188393, "y": 179.82486240395087, "in_degree": 1, "out_degree": 1}, {"id": "Session_Duration (hours)", "label": "Duration", "type": "source", "x": 845.466927422297, "y": 188.15505482037463, "in_degree": 0, "out_degree": 3}, {"id": "Calories_Burned", "label": "Calories Burned", "type": "intermediate", "x": 794.9457515830504, "y": 425.8076288340388, "in_degree": 2, "out_degree": 1}, {"id": "Proteins", "label": "Proteins", "type": "intermediate", "x": 761.0487071133742, "y": 542.1591006355304, "in_degree": 1, "out_degree": 1}, {"id": "Carbs", "label": "Carbs", "type": "sink", "x": 200.0, "y": 398.16948897097717, "in_degree": 2, "out_degree": 0}, {"id": "Fats", "label": "Fats", "type": "source", "x": 747.8662143894978, "y": 331.47412731979637, "in_degree": 0, "out_degree": 2}, {"id": "Calories", "label": "Calories", "type": "sink", "x": 1370.9242619889062, "y": 188.49659188794018, "in_degree": 1, "out_degree": 0}, {"id": "Water_Intake (liters)", "label": "Water Intake", "type": "source", "x": 903.8289031239904, "y": 588.1003361405003, "in_degree": 0, "out_degree": 2}, {"id": "cal_balance", "label": "Calorie Balance", "type": "sink", "x": 1529.7575374685794, "y": 527.4420233361649, "in_degree": 2, "out_degree": 0}, {"id": "expected_burn", "label": "Expected Burn", "type": "sink", "x": 544.7578628429121, "y": 150.0, "in_degree": 1, "out_degree": 0}, {"id": "rating", "label": "Rating", "type": "source", "x": 1600.0, "y": 346.1776626724117, "in_degree": 0, "out_degree": 0}];
+        const edgesData = [{"source": "Weight (kg)", "target": "Calories", "weight": 1.0, "label": "1.00"}, {"source": "Weight (kg)", "target": "cal_balance", "weight": 0.7826007118487784, "label": "0.78"}, {"source": "BMI", "target": "Weight (kg)", "weight": 0.15, "label": "0.15"}, {"source": "BMI", "target": "lean_mass_kg", "weight": 0.8711268462402837, "label": "0.87"}, {"source": "Fat_Percentage", "target": "BMI", "weight": 0.992454457819298, "label": "0.99"}, {"source": "Fat_Percentage", "target": "lean_mass_kg", "weight": 0.15, "label": "0.15"}, {"source": "lean_mass_kg", "target": "Weight (kg)", "weight": 0.9835038397950717, "label": "0.98"}, {"source": "pct_HRR", "target": "Max_BPM", "weight": 1.0, "label": "1.00"}, {"source": "pct_HRR", "target": "Avg_BPM", "weight": 1.0, "label": "1.00"}, {"source": "Workout_Frequency (days/week)", "target": "Calories_Burned", "weight": 0.15, "label": "0.15"}, {"source": "Session_Duration (hours)", "target": "Workout_Frequency (days/week)", "weight": 1.0, "label": "1.00"}, {"source": "Session_Duration (hours)", "target": "Calories_Burned", "weight": 0.9943129419986689, "label": "0.99"}, {"source": "Session_Duration (hours)", "target": "expected_burn", "weight": 1.0, "label": "1.00"}, {"source": "Calories_Burned", "target": "cal_balance", "weight": 0.5191942051205408, "label": "0.52"}, {"source": "Proteins", "target": "Carbs", "weight": 0.794468613416049, "label": "0.79"}, {"source": "Fats", "target": "Proteins", "weight": 1.0, "label": "1.00"}, {"source": "Fats", "target": "Carbs", "weight": 0.5033517610575736, "label": "0.50"}, {"source": "Water_Intake (liters)", "target": "BMI", "weight": 0.15, "label": "0.15"}, {"source": "Water_Intake (liters)", "target": "lean_mass_kg", "weight": 0.3799696081347541, "label": "0.38"}];
+        
+        let nodePositions = {};
+        nodesData.forEach(node => {
+            nodePositions[node.id] = { x: node.x, y: node.y };
+        });
+        
+        let hoveredNode = null;
+        let hoveredEdge = null;
+        let incomingEdges = [];
+        let zoom = 1;
+        let panX = 0;
+        let panY = 0;
+        let isDragging = false;
+        let lastX = 0;
+        let lastY = 0;
+        let draggedNode = null;
+        
+        const canvas = document.getElementById('canvas');
+        const wrapper = document.getElementById('canvas-wrapper');
+        const ctx = canvas.getContext('2d');
+        const tooltip = document.getElementById('tooltip');
+        
+        function resize() {
+            canvas.width = wrapper.clientWidth;
+            canvas.height = wrapper.clientHeight;
+            draw();
+        }
+        
+        window.addEventListener('resize', resize);
+        resize();
+        
+        document.getElementById('zoom-in').addEventListener('click', () => {
+            zoom = Math.min(zoom * 1.2, 3);
+            updateZoom();
+            draw();
+        });
+        
+        document.getElementById('zoom-out').addEventListener('click', () => {
+            zoom = Math.max(zoom / 1.2, 0.3);
+            updateZoom();
+            draw();
+        });
+        
+        document.getElementById('reset').addEventListener('click', () => {
+            zoom = 1;
+            panX = 0;
+            panY = 0;
+            updateZoom();
+            draw();
+        });
+        
+        function updateZoom() {
+            document.getElementById('zoom-level').textContent = Math.round(zoom * 100) + '%';
+        }
+        
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left - panX) / zoom;
+            const y = (e.clientY - rect.top - panY) / zoom;
+            
+            // Check if clicking on a node
+            for (let node of nodesData) {
+                const dx = x - nodePositions[node.id].x;
+                const dy = y - nodePositions[node.id].y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < 45) {
+                    draggedNode = node.id;
+                    isDragging = true;
+                    lastX = e.clientX;
+                    lastY = e.clientY;
+                    return;
+                }
+            }
+            
+            // Otherwise pan the canvas
+            isDragging = true;
+            lastX = e.clientX;
+            lastY = e.clientY;
+        });
+        
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                if (draggedNode) {
+                    // Drag node
+                    const rect = canvas.getBoundingClientRect();
+                    const x = (e.clientX - rect.left - panX) / zoom;
+                    const y = (e.clientY - rect.top - panY) / zoom;
+                    nodePositions[draggedNode] = { x, y };
+                } else {
+                    // Pan canvas
+                    panX += e.clientX - lastX;
+                    panY += e.clientY - lastY;
+                }
+                lastX = e.clientX;
+                lastY = e.clientY;
+                draw();
+            }
+            handleHover(e);
+        });
+        
+        canvas.addEventListener('mouseup', () => {
+            isDragging = false;
+            draggedNode = null;
+        });
+        
+        canvas.addEventListener('mouseleave', () => {
+            isDragging = false;
+            draggedNode = null;
+            hoveredNode = null;
+            hoveredEdge = null;
+            tooltip.classList.add('hidden');
+            draw();
+        });
+        
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            zoom = Math.max(0.3, Math.min(zoom * (e.deltaY > 0 ? 0.9 : 1.1), 3));
+            updateZoom();
+            draw();
+        });
+        
+        function handleHover(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left - panX) / zoom;
+            const y = (e.clientY - rect.top - panY) / zoom;
+            
+            hoveredNode = null;
+            hoveredEdge = null;
+            incomingEdges = [];
+            
+            // Check node hover
+            for (let node of nodesData) {
+                const dx = x - nodePositions[node.id].x;
+                const dy = y - nodePositions[node.id].y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < 45) {
+                    hoveredNode = node;
+                    incomingEdges = edgesData.map((e, i) => e.target === node.id ? i : -1).filter(i => i !== -1);
+                    tooltip.innerHTML = '<strong>' + node.label + '</strong><br>Type: ' + node.type + '<br>In: ' + node.in_degree + ' | Out: ' + node.out_degree;
+                    tooltip.classList.remove('hidden');
+                    tooltip.style.left = (e.clientX + 12) + 'px';
+                    tooltip.style.top = (e.clientY + 12) + 'px';
+                    return;
+                }
+            }
+            
+            // Check edge hover
+            for (let i = 0; i < edgesData.length; i++) {
+                const edge = edgesData[i];
+                const src = nodesData.find(n => n.id === edge.source);
+                const tgt = nodesData.find(n => n.id === edge.target);
+                
+                if (src && tgt) {
+                    const dist = pointToLineDistance(
+                        x, y,
+                        nodePositions[src.id].x, nodePositions[src.id].y,
+                        nodePositions[tgt.id].x, nodePositions[tgt.id].y
+                    );
+                    
+                    if (dist < 15) {
+                        hoveredEdge = i;
+                        tooltip.innerHTML = 
+                            '<strong>' + edge.source + ' → ' + edge.target + '</strong><br>' +
+                            'SHAP Weight: ' + edge.label + '<br>' +
+                            'Influence Strength: ' + (edge.weight * 100).toFixed(1) + '%';
+                        tooltip.classList.remove('hidden');
+                        tooltip.style.left = (e.clientX + 12) + 'px';
+                        tooltip.style.top = (e.clientY + 12) + 'px';
+                        return;
+                    }
+                }
+            }
+            
+            tooltip.classList.add('hidden');
+            draw();
+        }
+        
+        function pointToLineDistance(px, py, x1, y1, x2, y2) {
+            const A = px - x1, B = py - y1, C = x2 - x1, D = y2 - y1;
+            const dot = A * C + B * D;
+            const lenSq = C * C + D * D;
+            let param = lenSq !== 0 ? dot / lenSq : -1;
+            let xx, yy;
+            if (param < 0) { xx = x1; yy = y1; }
+            else if (param > 1) { xx = x2; yy = y2; }
+            else { xx = x1 + param * C; yy = y1 + param * D; }
+            const dx = px - xx, dy = py - yy;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+        
+        function getColor(type) {
+            return type === 'source' ? '#3498db' : type === 'sink' ? '#9b59b6' : '#95a5a6';
+        }
+        
+        function draw() {
+            ctx.fillStyle = '#f5f7fa';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.save();
+            ctx.translate(panX, panY);
+            ctx.scale(zoom, zoom);
+            
+            // Draw edges
+            edgesData.forEach((edge, i) => {
+                const src = nodesData.find(n => n.id === edge.source);
+                const tgt = nodesData.find(n => n.id === edge.target);
+                if (!src || !tgt) return;
+                
+                const srcPos = nodePositions[src.id];
+                const tgtPos = nodePositions[tgt.id];
+                
+                const isIncoming = incomingEdges.includes(i);
+                const isHovered = hoveredEdge === i;
+                const thickness = 1.5 + (edge.weight ** 1.5) * 6;
+                
+                ctx.strokeStyle = isHovered ? '#ff8c00' : isIncoming ? '#ff8c00' : '#8e44ad';
+                ctx.globalAlpha = isHovered ? 0.95 : isIncoming ? 0.8 : (hoveredNode ? 0.1 : 0.3);
+                ctx.lineWidth = isHovered ? thickness + 3 : isIncoming ? thickness + 2 : thickness;
+                
+                ctx.beginPath();
+                ctx.moveTo(srcPos.x, srcPos.y);
+                ctx.lineTo(tgtPos.x, tgtPos.y);
+                ctx.stroke();
+                
+                // Arrow
+                const angle = Math.atan2(tgtPos.y - srcPos.y, tgtPos.x - srcPos.x);
+                ctx.fillStyle = isHovered ? '#ff8c00' : isIncoming ? '#ff8c00' : '#8e44ad';
+                ctx.beginPath();
+                ctx.moveTo(tgtPos.x, tgtPos.y);
+                ctx.lineTo(tgtPos.x - 18 * Math.cos(angle - Math.PI / 6), tgtPos.y - 18 * Math.sin(angle - Math.PI / 6));
+                ctx.lineTo(tgtPos.x - 18 * Math.cos(angle + Math.PI / 6), tgtPos.y - 18 * Math.sin(angle + Math.PI / 6));
+                ctx.closePath();
+                ctx.fill();
+                
+                ctx.globalAlpha = 1;
+            });
+            
+            // Draw nodes
+            nodesData.forEach(node => {
+                const pos = nodePositions[node.id];
+                ctx.fillStyle = getColor(node.type);
+                ctx.strokeStyle = hoveredNode?.id === node.id ? '#ff8c00' : '#2c3e50';
+                ctx.lineWidth = hoveredNode?.id === node.id ? 4 : 3;
+                
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, 42, 0, 2 * Math.PI);
+                ctx.fill();
+                ctx.stroke();
+                
+                if (hoveredNode?.id === node.id) {
+                    ctx.strokeStyle = 'rgba(255, 140, 0, 0.4)';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, 55, 0, 2 * Math.PI);
+                    ctx.stroke();
+                }
+                
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 11px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                const words = node.label.split(' ');
+                if (words.length > 2) {
+                    ctx.fillText(words.slice(0, 2).join(' '), pos.x, pos.y - 4);
+                    ctx.font = '9px Arial';
+                    ctx.fillText(words.slice(2).join(' '), pos.x, pos.y + 6);
+                } else {
+                    ctx.fillText(node.label, pos.x, pos.y);
+                }
+            });
+            
+            ctx.restore();
+        }
+        
+        updateZoom();
+        draw();
+    </script>
+</body>
+</html>
